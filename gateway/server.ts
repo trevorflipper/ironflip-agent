@@ -1,12 +1,15 @@
 import express from "express";
 import { paymentMiddleware, x402ResourceServer } from "@x402/express";
 import { registerExactSvmScheme } from "@x402/svm/exact/server";
+import { registerExactEvmScheme } from "@x402/evm/exact/server";
 import { HTTPFacilitatorClient } from "@x402/core/server";
 import { declareDiscoveryExtension, bazaarResourceServerExtension } from "@x402/extensions/bazaar";
 import { NearClient } from "./near-client.js";
 import { NearService } from "./near-service.js";
 import { SolanaClient } from "./solana-client.js";
 import { SolanaService } from "./solana-service.js";
+import { BaseClient } from "./base-client.js";
+import { BaseService } from "./base-service.js";
 import * as analytics from "./analytics.js";
 import { DASHBOARD_HTML } from "./dashboard.js";
 import { OPENAPI_SPEC, AGENT_CARD, AI_PLUGIN, LLMS_TXT } from "./discovery.js";
@@ -23,6 +26,12 @@ const PAY_TO = process.env.X402_PAY_TO || "";
 
 // Solana mainnet CAIP-2 identifier
 const NETWORK = (process.env.X402_NETWORK || "solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp") as `${string}:${string}`;
+
+// Base L2 wallet address to receive USDC payments
+const BASE_PAY_TO = process.env.X402_BASE_PAY_TO || "0x364839A584817393D347Aaf40D4f860EE40Fb884";
+
+// Base mainnet CAIP-2 identifier (EIP-155 chain ID 8453)
+const BASE_NETWORK = (process.env.X402_BASE_NETWORK || "eip155:8453") as `${string}:${string}`;
 
 // AutoIncentive facilitator — free, supports Solana mainnet + Base
 const FACILITATOR_URL =
@@ -44,6 +53,11 @@ const nearService = new NearService(nearClient);
 
 const solanaClient = new SolanaClient();
 const solanaService = new SolanaService(solanaClient);
+
+// ─── Base Client ─────────────────────────────────────────────────────────────
+
+const baseClient = new BaseClient();
+const baseService = new BaseService(baseClient);
 
 // ─── Express App ─────────────────────────────────────────────────────────────
 
@@ -123,10 +137,14 @@ app.get("/llms.txt", (_req, res) => {
 app.get("/health", (_req, res) => {
   res.json({
     status: "ok",
-    service: "near-x402-gateway",
+    service: "x402-multi-chain-gateway",
     mode: FREE_MODE ? "free" : "paid",
-    network: NETWORK,
-    near_network: process.env.NEAR_NETWORK_ID || "mainnet",
+    chains: ["near", "solana", "base"],
+    networks: {
+      solana: NETWORK,
+      base: BASE_NETWORK,
+      near: process.env.NEAR_NETWORK_ID || "mainnet",
+    },
   });
 });
 
@@ -134,9 +152,10 @@ app.get("/health", (_req, res) => {
 app.get("/", (_req, res) => {
   res.json({
     name: "x402 Blockchain Data API",
-    version: "2.0.0",
-    description: "Pay-per-call multi-chain blockchain data API powered by x402 (NEAR + Solana)",
+    version: "3.0.0",
+    description: "Pay-per-call multi-chain blockchain data API powered by x402 (NEAR, Solana & Base)",
     mode: FREE_MODE ? "free (no wallet configured)" : "paid",
+    total_endpoints: 24,
     chains: {
       near: {
         endpoints: {
@@ -163,6 +182,17 @@ app.get("/", (_req, res) => {
           "GET /api/solana/network/stats": { price: "$0.002", description: "Network stats (epoch, TPS, supply)" },
         },
       },
+      base: {
+        endpoints: {
+          "GET /api/base/account/[id]/balance": { price: "$0.001", description: "ETH balance on Base" },
+          "GET /api/base/account/[id]/info": { price: "$0.001", description: "Account info (EOA vs contract)" },
+          "GET /api/base/account/[id]/tokens": { price: "$0.002", description: "ERC-20 token balances" },
+          "GET /api/base/tx/[hash]": { price: "$0.001", description: "Transaction details" },
+          "GET /api/base/block/latest": { price: "$0.002", description: "Latest block info" },
+          "GET /api/base/gas": { price: "$0.001", description: "Current gas price" },
+          "GET /api/base/network/stats": { price: "$0.002", description: "Network stats" },
+        },
+      },
     },
     analytics: {
       dashboard: "/dashboard",
@@ -170,7 +200,10 @@ app.get("/", (_req, res) => {
     },
     payment: FREE_MODE
       ? "Gateway running in free mode. Set X402_PAY_TO to enable payments."
-      : { chain: "Solana", token: "USDC", network: NETWORK, payTo: PAY_TO },
+      : [
+          { chain: "Solana", token: "USDC", network: NETWORK, payTo: PAY_TO },
+          { chain: "Base", token: "USDC", network: BASE_NETWORK, payTo: BASE_PAY_TO },
+        ],
   });
 });
 
@@ -197,6 +230,14 @@ const PRICE_MAP: Record<string, string> = {
   "GET /api/solana/validators": "$0.002",
   "GET /api/solana/tokens/prices": "$0.002",
   "GET /api/solana/network/stats": "$0.002",
+  // Base endpoints
+  "GET /api/base/account/[id]/balance": "$0.001",
+  "GET /api/base/account/[id]/info": "$0.001",
+  "GET /api/base/account/[id]/tokens": "$0.002",
+  "GET /api/base/tx/[hash]": "$0.001",
+  "GET /api/base/block/latest": "$0.002",
+  "GET /api/base/gas": "$0.001",
+  "GET /api/base/network/stats": "$0.002",
 };
 
 // ─── Bazaar Discovery Metadata ────────────────────────────────────────────────
@@ -279,6 +320,36 @@ const ROUTE_DISCOVERY: Record<string, ReturnType<typeof declareDiscoveryExtensio
   "GET /api/solana/network/stats": declareDiscoveryExtension({
     output: { example: { epoch: 500, avg_tps: 3000, total_supply_sol: 570000000, circulating_supply_sol: 420000000 } },
   }),
+  // Base endpoints
+  "GET /api/base/account/[id]/balance": declareDiscoveryExtension({
+    input: { id: "0x364839A584817393D347Aaf40D4f860EE40Fb884" },
+    inputSchema: { properties: { id: { type: "string", description: "Ethereum address (0x...)" } }, required: ["id"] },
+    output: { example: { address: "0x364...", wei: "1000000000000000000", eth: 1.0, chain_id: 8453 } },
+  }),
+  "GET /api/base/account/[id]/info": declareDiscoveryExtension({
+    input: { id: "0x364839A584817393D347Aaf40D4f860EE40Fb884" },
+    inputSchema: { properties: { id: { type: "string", description: "Ethereum address (0x...)" } }, required: ["id"] },
+    output: { example: { address: "0x364...", is_contract: false, nonce: 5, balance_eth: 1.0 } },
+  }),
+  "GET /api/base/account/[id]/tokens": declareDiscoveryExtension({
+    input: { id: "0x364839A584817393D347Aaf40D4f860EE40Fb884" },
+    inputSchema: { properties: { id: { type: "string", description: "Ethereum address (0x...)" } }, required: ["id"] },
+    output: { example: { address: "0x364...", token_count: 3, tokens: [{ symbol: "USDC", balance: 100.5 }] } },
+  }),
+  "GET /api/base/tx/[hash]": declareDiscoveryExtension({
+    input: { hash: "0xabc123..." },
+    inputSchema: { properties: { hash: { type: "string", description: "Transaction hash (0x...)" } }, required: ["hash"] },
+    output: { example: { hash: "0xabc...", found: true, from: "0x...", to: "0x...", status: "success" } },
+  }),
+  "GET /api/base/block/latest": declareDiscoveryExtension({
+    output: { example: { number: 25000000, timestamp_iso: "2026-03-02T12:00:00.000Z", transaction_count: 150 } },
+  }),
+  "GET /api/base/gas": declareDiscoveryExtension({
+    output: { example: { gas_price_gwei: 0.005, chain_id: 8453 } },
+  }),
+  "GET /api/base/network/stats": declareDiscoveryExtension({
+    output: { example: { chain_id: 8453, block_number: 25000000, gas_price_gwei: 0.005 } },
+  }),
 };
 
 if (!FREE_MODE) {
@@ -287,6 +358,7 @@ if (!FREE_MODE) {
   });
   const resourceServer = new x402ResourceServer(facilitatorClient);
   registerExactSvmScheme(resourceServer);
+  registerExactEvmScheme(resourceServer);
   resourceServer.registerExtension(bazaarResourceServerExtension);
 
   // Register payment settlement hook for analytics
@@ -328,7 +400,10 @@ if (!FREE_MODE) {
   const routeConfig: Record<string, any> = {};
   for (const [route, price] of Object.entries(PRICE_MAP)) {
     routeConfig[route] = {
-      accepts: [{ scheme: "exact" as const, price, network: NETWORK, payTo: PAY_TO }],
+      accepts: [
+        { scheme: "exact" as const, price, network: NETWORK, payTo: PAY_TO },
+        { scheme: "exact" as const, price, network: BASE_NETWORK, payTo: BASE_PAY_TO },
+      ],
       description: "Blockchain data endpoint",
       mimeType: "application/json",
       ...(ROUTE_DISCOVERY[route] ? { extensions: { ...ROUTE_DISCOVERY[route] } } : {}),
@@ -539,6 +614,85 @@ app.get("/api/solana/network/stats", async (_req, res) => {
   }
 });
 
+// ─── Base Route Handlers ─────────────────────────────────────────────────────
+
+// ETH balance on Base
+app.get("/api/base/account/:id/balance", async (req, res) => {
+  try {
+    const data = await baseService.getBalance(req.params.id);
+    res.json(data);
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : String(err);
+    res.status(400).json({ error: message });
+  }
+});
+
+// Account info (EOA vs contract)
+app.get("/api/base/account/:id/info", async (req, res) => {
+  try {
+    const data = await baseService.getAccountInfo(req.params.id);
+    res.json(data);
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : String(err);
+    res.status(400).json({ error: message });
+  }
+});
+
+// ERC-20 token balances
+app.get("/api/base/account/:id/tokens", async (req, res) => {
+  try {
+    const data = await baseService.getTokenBalances(req.params.id);
+    res.json(data);
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : String(err);
+    res.status(400).json({ error: message });
+  }
+});
+
+// Transaction details
+app.get("/api/base/tx/:hash", async (req, res) => {
+  try {
+    const data = await baseService.getTransaction(req.params.hash);
+    res.json(data);
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : String(err);
+    res.status(400).json({ error: message });
+  }
+});
+
+// Latest block
+app.get("/api/base/block/latest", async (_req, res) => {
+  try {
+    const data = await baseService.getLatestBlock();
+    res.json(data);
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : String(err);
+    res.status(500).json({ error: message });
+  }
+});
+
+// Gas price
+app.get("/api/base/gas", async (_req, res) => {
+  try {
+    const data = await baseService.getGasPrice();
+    res.json(data);
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : String(err);
+    res.status(500).json({ error: message });
+  }
+});
+
+// Network stats
+app.get("/api/base/network/stats", async (_req, res) => {
+  try {
+    const data = await baseService.getNetworkStats();
+    res.json(data);
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : String(err);
+    res.status(500).json({ error: message });
+  }
+});
+
 // ─── Start ───────────────────────────────────────────────────────────────────
 
 async function main() {
@@ -548,11 +702,12 @@ async function main() {
 
   app.listen(PORT, HOST, () => {
     console.log(`x402 gateway listening on http://${HOST}:${PORT}`);
-    console.log(`Chains: NEAR (${nearClient.getNetworkId()}) + Solana (${solanaClient.getNetwork()})`);
+    console.log(`Chains: NEAR (${nearClient.getNetworkId()}) + Solana (${solanaClient.getNetwork()}) + Base (${baseClient.getNetwork()})`);
     console.log(`Mode: ${FREE_MODE ? "FREE (set X402_PAY_TO to enable payments)" : "PAID"}`);
     console.log(`Analytics: http://${HOST}:${PORT}/dashboard`);
     if (!FREE_MODE) {
-      console.log(`Payment: USDC on ${NETWORK} → ${PAY_TO}`);
+      console.log(`Payment (Solana): USDC on ${NETWORK} → ${PAY_TO}`);
+      console.log(`Payment (Base): USDC on ${BASE_NETWORK} → ${BASE_PAY_TO}`);
     }
   });
 }

@@ -17,8 +17,8 @@ export const OPENAPI_SPEC = {
   openapi: "3.1.0",
   info: {
     title: "x402 Multi-Chain Blockchain API",
-    version: "2.0.0",
-    description: "Pay-per-call blockchain data API for NEAR Protocol and Solana. All data endpoints require x402 USDC micropayment on Solana mainnet. No API keys, no signup — just attach a payment header.",
+    version: "3.0.0",
+    description: "Pay-per-call blockchain data API for NEAR Protocol, Solana, and Base (Ethereum L2). All data endpoints require x402 USDC micropayment on Solana or Base. No API keys, no signup — just attach a payment header.",
     contact: { email: "openclaw@proton.me" },
   },
   servers: [{ url: BASE_URL, description: "Production" }],
@@ -207,28 +207,106 @@ export const OPENAPI_SPEC = {
         responses: { "200": { description: "Network stats" }, "402": { description: "Payment required" } },
       },
     },
+    // Base endpoints
+    "/api/base/account/{id}/balance": {
+      get: {
+        operationId: "getBaseBalance",
+        summary: "ETH balance on Base",
+        description: "Returns ETH balance in wei and human-readable ETH on Base L2. Price: $0.001 USDC.",
+        tags: ["Base"],
+        parameters: [{ name: "id", in: "path", required: true, schema: { type: "string" }, example: "0x364839A584817393D347Aaf40D4f860EE40Fb884" }],
+        responses: { "200": { description: "Balance data" }, "402": { description: "Payment required" } },
+      },
+    },
+    "/api/base/account/{id}/info": {
+      get: {
+        operationId: "getBaseAccountInfo",
+        summary: "Base account info",
+        description: "Returns account type (EOA vs contract), nonce, balance, and code size. Price: $0.001 USDC.",
+        tags: ["Base"],
+        parameters: [{ name: "id", in: "path", required: true, schema: { type: "string" } }],
+        responses: { "200": { description: "Account info" }, "402": { description: "Payment required" } },
+      },
+    },
+    "/api/base/account/{id}/tokens": {
+      get: {
+        operationId: "getBaseTokenBalances",
+        summary: "ERC-20 token balances on Base",
+        description: "Returns balances for popular Base ERC-20 tokens (USDC, USDbC, DAI, WETH, cbETH, AERO). Price: $0.002 USDC.",
+        tags: ["Base"],
+        parameters: [{ name: "id", in: "path", required: true, schema: { type: "string" } }],
+        responses: { "200": { description: "Token balance list" }, "402": { description: "Payment required" } },
+      },
+    },
+    "/api/base/tx/{hash}": {
+      get: {
+        operationId: "getBaseTransaction",
+        summary: "Base transaction details",
+        description: "Returns full transaction with receipt, status, gas used, and log count. Price: $0.001 USDC.",
+        tags: ["Base"],
+        parameters: [{ name: "hash", in: "path", required: true, schema: { type: "string" } }],
+        responses: { "200": { description: "Transaction data" }, "402": { description: "Payment required" } },
+      },
+    },
+    "/api/base/block/latest": {
+      get: {
+        operationId: "getBaseLatestBlock",
+        summary: "Latest Base block",
+        description: "Returns latest block number, timestamp, tx count, gas used, and base fee. Price: $0.002 USDC.",
+        tags: ["Base"],
+        responses: { "200": { description: "Block data" }, "402": { description: "Payment required" } },
+      },
+    },
+    "/api/base/gas": {
+      get: {
+        operationId: "getBaseGasPrice",
+        summary: "Base gas price",
+        description: "Returns current gas price in wei and gwei on Base L2. Price: $0.001 USDC.",
+        tags: ["Base"],
+        responses: { "200": { description: "Gas price" }, "402": { description: "Payment required" } },
+      },
+    },
+    "/api/base/network/stats": {
+      get: {
+        operationId: "getBaseNetworkStats",
+        summary: "Base network statistics",
+        description: "Returns chain ID, block number, and gas price for Base L2. Price: $0.002 USDC.",
+        tags: ["Base"],
+        responses: { "200": { description: "Network stats" }, "402": { description: "Payment required" } },
+      },
+    },
   },
-  "x-x402-payment": {
-    chain: "Solana",
-    token: "USDC",
-    network: "solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp",
-    payTo: "91xx1zU7hV59fiYq9jzJtThzgHkzm1JRjtgeKK1TGwA7",
-    facilitator: "https://facilitator.x402endpoints.online",
-    protocol: "https://x402.org",
-  },
+  "x-x402-payment": [
+    {
+      chain: "Solana",
+      token: "USDC",
+      network: "solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp",
+      payTo: "91xx1zU7hV59fiYq9jzJtThzgHkzm1JRjtgeKK1TGwA7",
+      facilitator: "https://facilitator.x402endpoints.online",
+      protocol: "https://x402.org",
+    },
+    {
+      chain: "Base",
+      token: "USDC",
+      network: "eip155:8453",
+      payTo: "0x364839A584817393D347Aaf40D4f860EE40Fb884",
+      facilitator: "https://facilitator.x402endpoints.online",
+      protocol: "https://x402.org",
+    },
+  ],
 };
 
 // ─── A2A Agent Card ───────────────────────────────────────────────────────────
 
 export const AGENT_CARD = {
   name: "x402 Multi-Chain Blockchain API",
-  description: "Pay-per-call blockchain data for NEAR Protocol and Solana. Returns account balances, token holdings, validators, staking positions, transactions, DeFi pools, and token prices. All endpoints accept x402 USDC micropayments on Solana — no API keys, no signup.",
+  description: "Pay-per-call blockchain data for NEAR Protocol, Solana, and Base (Ethereum L2). Returns account balances, token holdings, validators, staking positions, transactions, DeFi pools, gas prices, and token prices across 3 chains. All endpoints accept x402 USDC micropayments on Solana or Base — no API keys, no signup.",
   url: BASE_URL,
   provider: {
     organization: "OpenClaw",
     url: BASE_URL,
   },
-  version: "2.0.0",
+  version: "3.0.0",
   documentationUrl: `${BASE_URL}/openapi.json`,
   capabilities: {
     streaming: false,
@@ -312,6 +390,34 @@ export const AGENT_CARD = {
       tags: ["solana", "transaction", "explorer"],
       examples: ["Show details for this Solana transaction"],
     },
+    {
+      id: "base-balance",
+      name: "Base ETH Balance",
+      description: "Get ETH balance for any address on Base L2",
+      tags: ["base", "ethereum", "l2", "balance", "wallet"],
+      examples: ["What is the ETH balance on Base?", "Check Base wallet balance"],
+    },
+    {
+      id: "base-tokens",
+      name: "Base Token Balances",
+      description: "Get ERC-20 token balances (USDC, WETH, DAI, AERO, etc.) for an address on Base",
+      tags: ["base", "erc20", "tokens", "usdc", "portfolio"],
+      examples: ["Show Base token holdings", "What USDC does this address hold on Base?"],
+    },
+    {
+      id: "base-tx",
+      name: "Base Transaction Details",
+      description: "Get transaction details with receipt, status, and gas info on Base L2",
+      tags: ["base", "transaction", "explorer", "ethereum"],
+      examples: ["Show details for this Base transaction"],
+    },
+    {
+      id: "base-network",
+      name: "Base Network Stats",
+      description: "Get Base L2 network stats: block number, gas price, latest block info",
+      tags: ["base", "network", "gas", "block", "l2"],
+      examples: ["What is Base gas price?", "Show Base network stats", "Latest Base block?"],
+    },
   ],
 };
 
@@ -321,8 +427,8 @@ export const AI_PLUGIN = {
   schema_version: "v1",
   name_for_human: "Blockchain Data API",
   name_for_model: "blockchain_data_x402",
-  description_for_human: "NEAR + Solana blockchain data via x402 micropayments.",
-  description_for_model: "API for querying NEAR Protocol and Solana blockchain data. Use this to look up account balances (NEAR or SOL), SPL token holdings, transaction details, validator information, staking positions, NFT tokens, DeFi liquidity pools, token prices, and network statistics. All endpoints require x402 USDC payment on Solana mainnet — send a payment header with each request. Prices range from $0.001 to $0.005 per call.",
+  description_for_human: "NEAR, Solana & Base blockchain data via x402 micropayments.",
+  description_for_model: "API for querying NEAR Protocol, Solana, and Base (Ethereum L2) blockchain data. Use this to look up account balances (NEAR, SOL, or ETH on Base), token holdings (SPL or ERC-20), transaction details, validator information, staking positions, NFT tokens, DeFi liquidity pools, gas prices, token prices, and network statistics across 3 chains. All endpoints require x402 USDC payment on Solana mainnet or Base — send a payment header with each request. Prices range from $0.001 to $0.005 per call.",
   auth: { type: "none" },
   api: {
     type: "openapi",
@@ -338,11 +444,11 @@ export const AI_PLUGIN = {
 
 export const LLMS_TXT = `# x402 Multi-Chain Blockchain API
 
-> Pay-per-call NEAR Protocol and Solana blockchain data. All endpoints accept x402 USDC micropayments on Solana mainnet. No API keys, no signup — just attach a payment header.
+> Pay-per-call NEAR Protocol, Solana, and Base (Ethereum L2) blockchain data. All endpoints accept x402 USDC micropayments on Solana or Base. No API keys, no signup — just attach a payment header.
 
-This API serves real-time blockchain data across two chains (NEAR + Solana) with 17 endpoints. Each call costs $0.001-$0.005 USDC via the x402 payment protocol. Agents pay by including an X-PAYMENT header with a Solana USDC transaction proof.
+This API serves real-time blockchain data across three chains (NEAR, Solana & Base) with 24 endpoints. Each call costs $0.001-$0.005 USDC via the x402 payment protocol. Agents pay by including an X-PAYMENT header with a USDC transaction proof on Solana or Base.
 
-## NEAR Protocol Endpoints
+## NEAR Protocol Endpoints (8)
 
 - [Account Balance](${BASE_URL}/api/near/account/{id}/balance): GET — Returns NEAR balance (total, staked, available). $0.001
 - [Access Keys](${BASE_URL}/api/near/account/{id}/keys): GET — Returns full and function-call access keys. $0.001
@@ -353,7 +459,7 @@ This API serves real-time blockchain data across two chains (NEAR + Solana) with
 - [NFT Tokens](${BASE_URL}/api/near/nft/{contract}/tokens): GET — NFTs with metadata on a contract. $0.002
 - [DeFi Pools](${BASE_URL}/api/near/defi/pools): GET — Ref Finance liquidity pools. $0.005
 
-## Solana Endpoints
+## Solana Endpoints (9)
 
 - [SOL Balance](${BASE_URL}/api/solana/account/{id}/balance): GET — SOL balance in lamports and SOL. $0.001
 - [Account Info](${BASE_URL}/api/solana/account/{id}/info): GET — Account metadata (owner, executable). $0.001
@@ -365,12 +471,23 @@ This API serves real-time blockchain data across two chains (NEAR + Solana) with
 - [Token Prices](${BASE_URL}/api/solana/tokens/prices): GET — SOL, USDC, JUP, JTO, BONK prices + 24h change. $0.002
 - [Network Stats](${BASE_URL}/api/solana/network/stats): GET — Epoch, TPS, supply. $0.002
 
+## Base (Ethereum L2) Endpoints (7)
+
+- [ETH Balance](${BASE_URL}/api/base/account/{id}/balance): GET — ETH balance in wei and human-readable. $0.001
+- [Account Info](${BASE_URL}/api/base/account/{id}/info): GET — EOA vs contract, nonce, code size. $0.001
+- [Token Balances](${BASE_URL}/api/base/account/{id}/tokens): GET — ERC-20 balances (USDC, WETH, DAI, AERO, etc.). $0.002
+- [Transaction](${BASE_URL}/api/base/tx/{hash}): GET — Full tx with receipt, status, gas used. $0.001
+- [Latest Block](${BASE_URL}/api/base/block/latest): GET — Block number, timestamp, tx count, gas. $0.002
+- [Gas Price](${BASE_URL}/api/base/gas): GET — Current gas price in gwei. $0.001
+- [Network Stats](${BASE_URL}/api/base/network/stats): GET — Chain ID, block number, gas price. $0.002
+
 ## Payment
 
 - Protocol: [x402](https://x402.org) — HTTP 402 payment flow
-- Chain: Solana mainnet
-- Token: USDC (EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v)
-- Pay to: 91xx1zU7hV59fiYq9jzJtThzgHkzm1JRjtgeKK1TGwA7
+- Accepted on: Solana mainnet OR Base (Ethereum L2)
+- Token: USDC
+- Solana pay-to: 91xx1zU7hV59fiYq9jzJtThzgHkzm1JRjtgeKK1TGwA7
+- Base pay-to: 0x364839A584817393D347Aaf40D4f860EE40Fb884
 - Facilitator: https://facilitator.x402endpoints.online
 
 ## Documentation

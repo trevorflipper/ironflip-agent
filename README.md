@@ -31,9 +31,9 @@ IronFlip handles the full job lifecycle on market.near.ai autonomously:
         MCP Servers (Streamable HTTP)
         /         |         \
   market-api  code-exec  x402-gateway
-  (8 tools)   (5 tools)  (17 endpoints)
+  (8 tools)   (5 tools)  (24 endpoints)
                             |
-                     NEAR RPC + Solana RPC
+                   NEAR RPC + Solana RPC + Base RPC
 ```
 
 ### Components
@@ -45,7 +45,7 @@ IronFlip handles the full job lifecycle on market.near.ai autonomously:
 | **Kimi 2.5** | Execution, data processing, routine tasks | via NVIDIA NIM API |
 | **market-api MCP** | 8 tools for marketplace interaction (jobs, bids, wallet) | Python, port 8081 |
 | **code-exec MCP** | 5 tools for sandboxed code execution | Python, port 8082 |
-| **x402 Gateway** | 17 blockchain data endpoints behind USDC paywalls | TypeScript/Express, port 8084 |
+| **x402 Gateway** | 24 blockchain data endpoints behind USDC paywalls | TypeScript/Express, port 8084 |
 | **Caddy** | HTTPS reverse proxy with auto-renewing Let's Encrypt certs | DuckDNS DNS-01 |
 | **SQLite Analytics** | Request logging, payment tracking, dashboard | better-sqlite3 |
 
@@ -58,9 +58,9 @@ The agent uses different LLMs for different tasks:
 
 This optimizes for cost while maintaining quality where it matters.
 
-## x402 Gateway — 17 Pay-Per-Call Endpoints
+## x402 Gateway — 24 Pay-Per-Call Endpoints
 
-The gateway serves real blockchain data from NEAR Protocol and Solana behind x402 USDC micropayments. No API keys, no signup — agents just attach a payment header.
+The gateway serves real blockchain data from NEAR Protocol, Solana, and Base (Ethereum L2) behind x402 USDC micropayments. No API keys, no signup — agents just attach a payment header. Payments accepted on both Solana and Base USDC.
 
 ### NEAR Protocol (8 endpoints)
 | Endpoint | Price | Description |
@@ -87,11 +87,22 @@ The gateway serves real blockchain data from NEAR Protocol and Solana behind x40
 | `GET /api/solana/tokens/prices` | $0.002 | Token prices + 24h change |
 | `GET /api/solana/network/stats` | $0.002 | Epoch, TPS, supply |
 
+### Base — Ethereum L2 (7 endpoints)
+| Endpoint | Price | Description |
+|----------|-------|-------------|
+| `GET /api/base/account/{id}/balance` | $0.001 | ETH balance on Base |
+| `GET /api/base/account/{id}/info` | $0.001 | Account info (EOA vs contract) |
+| `GET /api/base/account/{id}/tokens` | $0.002 | ERC-20 token balances |
+| `GET /api/base/tx/{hash}` | $0.001 | Transaction with receipt and status |
+| `GET /api/base/block/latest` | $0.002 | Latest block info |
+| `GET /api/base/gas` | $0.001 | Current gas price |
+| `GET /api/base/network/stats` | $0.002 | Network statistics |
+
 ### Payment Flow
 ```
 Agent sends GET request
-    → Gateway returns 402 + payment requirements
-Agent sends payment via x402 header (Solana USDC)
+    → Gateway returns 402 + payment requirements (Solana USDC or Base USDC)
+Agent sends payment via x402 header
     → Facilitator verifies payment on-chain
     → Gateway returns blockchain data
 ```
@@ -137,7 +148,7 @@ All self-hosted on a single DigitalOcean droplet (2 vCPU, 4 GB RAM, Ubuntu 24.04
 ### Gateway Health
 ```bash
 $ curl https://ironflip.duckdns.org/health
-{"status":"ok","service":"near-x402-gateway","mode":"paid","network":"solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp","near_network":"mainnet"}
+{"status":"ok","service":"x402-multi-chain-gateway","mode":"paid","chains":["near","solana","base"],"networks":{"solana":"solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp","base":"eip155:8453","near":"mainnet"}}
 ```
 
 ### x402 Payment Required
