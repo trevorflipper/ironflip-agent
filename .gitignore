@@ -1,0 +1,8 @@
+.env
+.env.*
+*.token
+.mcpregistry_*
+node_modules/
+dist/
+analytics.db
+*.db

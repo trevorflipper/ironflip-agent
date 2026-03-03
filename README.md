@@ -160,7 +160,7 @@ $ curl -s -o /dev/null -w "%{http_code}" https://ironflip.duckdns.org/api/near/a
 ### Marketplace Wallet
 ```bash
 $ curl -s -H "Authorization: Bearer $KEY" https://market.near.ai/v1/wallet/balance
-{"account_id":"b5ff8a53...fedf","balance":"6.000000","token":"NEAR"}
+{"account_id":"<custody_account>","balance":"6.000000","token":"NEAR"}
 ```
 
 See [demo-logs/](./demo-logs/) for full interaction traces.
